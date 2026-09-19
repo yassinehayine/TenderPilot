@@ -1,5 +1,12 @@
 import { useEffect, useState } from 'react';
-import { getTenderStatus, type TenderStatus } from '../../lib/api';
+import {
+  getComplianceReport,
+  getProposal,
+  getQualification,
+  getTenderRequirements,
+  getTenderStatus,
+  type TenderStatus
+} from '../../lib/api';
 
 interface Props { tenderId: string | null; }
 
@@ -38,9 +45,51 @@ const stateLabels: Record<StageState, string> = {
   pending: 'Pending'
 };
 
+/** Persisted outputs of each completed stage. Results only — never reasoning. */
+type StageOutputs = Partial<Record<string, string>>;
+
 export function AgentExecutionPanel({ tenderId }: Props) {
   const [status, setStatus] = useState<TenderStatus | null>(null);
   const [isStale, setIsStale] = useState(false);
+  const [outputs, setOutputs] = useState<StageOutputs>({});
+
+  const stateSignature = status ? `${status.processingStage}|${status.processingStatus}|${status.processingAttempt}` : '';
+
+  /**
+   * Stage outputs are re-read only when the workflow state actually changes,
+   * so the 2.5s status poll stays a single request per tick.
+   */
+  useEffect(() => {
+    if (!tenderId || !stateSignature) { setOutputs({}); return; }
+    let active = true;
+    void Promise.allSettled([
+      getTenderRequirements(tenderId),
+      getQualification(tenderId),
+      getComplianceReport(tenderId),
+      getProposal(tenderId)
+    ]).then(([requirements, qualification, compliance, proposal]) => {
+      if (!active) return;
+      const next: StageOutputs = {};
+      if (requirements.status === 'fulfilled' && requirements.value.length > 0) {
+        next.extract = `${requirements.value.length} requirements extracted`;
+      }
+      if (qualification.status === 'fulfilled' && qualification.value) {
+        const decision = qualification.value.decision === 'no_go' ? 'NO-GO' : qualification.value.decision.toUpperCase();
+        next.qualify = `${decision} · ${qualification.value.blockers.length} blockers`;
+      }
+      if (compliance.status === 'fulfilled' && compliance.value) {
+        const { compliant, non_compliant: nonCompliant, needs_review: needsReview } = compliance.value.summary;
+        next.compliance = `${compliant} compliant · ${nonCompliant} non compliant · ${needsReview} review`;
+      }
+      if (proposal.status === 'fulfilled' && proposal.value.length > 0) {
+        next.write = `${proposal.value.length} proposal sections`;
+        const approved = proposal.value.filter((section) => section.reviewStatus === 'approved').length;
+        next.human_review = `${approved} of ${proposal.value.length} sections approved`;
+      }
+      setOutputs(next);
+    });
+    return () => { active = false; };
+  }, [tenderId, stateSignature]);
 
   useEffect(() => {
     if (!tenderId) { setStatus(null); setIsStale(false); return; }
@@ -87,6 +136,7 @@ export function AgentExecutionPanel({ tenderId }: Props) {
           {showAttempt
             ? <span className="attempt-chip">Attempt {status.processingAttempt}</span>
             : <span className="agent-stage-status">{stage.agent}</span>}
+          {outputs[stage.key] && <span className="agent-stage-output">{outputs[stage.key]}</span>}
         </li>;
       })}
     </ol>

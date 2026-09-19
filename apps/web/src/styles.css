@@ -613,3 +613,49 @@ nav { display: grid; gap: 2px; }
   .agent-stage-list { grid-template-columns: 1fr; }
   .page-heading { flex-direction: column; align-items: flex-start; gap: 14px; }
 }
+
+/* ---------- Tender risk & evidence radar --------------------------------- */
+
+.radar {
+  margin-bottom: 14px;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+.radar-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.radar-head .eyebrow { margin: 0 0 2px; }
+.radar-head h3 { margin: 0; font-size: var(--fs-md); font-weight: 600; color: var(--text); }
+.radar .verdict-summary { margin-bottom: 12px; }
+.radar .verdict-stat-value { display: flex; align-items: baseline; gap: 7px; }
+.verdict-mark { font-size: var(--fs-sm); font-weight: 700; opacity: .75; }
+
+.coverage { padding-top: 12px; border-top: 1px solid var(--border); }
+.coverage-label { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 7px; font-size: var(--fs-sm); }
+.coverage-label > span { color: var(--text-muted); }
+.coverage-label strong { font-weight: 600; font-size: var(--fs-base); }
+.coverage-bar { height: 8px; border-radius: 999px; background: var(--neutral-soft); overflow: hidden; }
+.coverage-fill { height: 100%; border-radius: 999px; background: var(--ok); }
+
+.radar-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+.radar-column .eyebrow { margin-bottom: 8px; }
+.radar-list { display: grid; gap: 10px; margin: 0; padding: 0 0 0 18px; }
+.radar-list li { color: var(--text-muted); font-size: var(--fs-sm); }
+.radar-list li::marker { color: var(--text-subtle); font-weight: 600; }
+.radar-item-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.radar-item-head strong { color: var(--text); font-size: var(--fs-base); font-weight: 600; line-height: 1.4; }
+.radar-list p { margin: 3px 0 4px; line-height: 1.5; }
+
+@media (max-width: 1080px) { .radar-columns { grid-template-columns: 1fr; gap: 14px; } }
+.agent-stage-output {
+  margin-top: 2px;
+  padding: 3px 7px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.35;
+}
+.agent-stage.done .agent-stage-output { border-color: var(--ok-soft); background: var(--ok-soft); color: var(--ok); }

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { getComplianceReport, getTenderRequirements, type ComplianceAssessment, type ComplianceVerdict, type TenderRequirement } from '../../lib/api';
+import { getComplianceReport, getQualification, getTenderRequirements, type ComplianceAssessment, type ComplianceVerdict, type QualificationResult, type TenderRequirement } from '../../lib/api';
+import { TenderRadar } from './TenderRadar';
 
 interface Props { tenderId: string | null; }
 
@@ -26,12 +27,13 @@ const verdictTone: Record<ComplianceVerdict, string> = {
   missing_evidence: 'warn',
   needs_review: 'info'
 };
-const verdictOrder: ComplianceVerdict[] = ['compliant', 'non_compliant', 'missing_evidence', 'needs_review'];
 
 export function ComplianceMatrix({ tenderId }: Props) {
   const [requirements, setRequirements] = useState<TenderRequirement[]>([]);
   const [assessments, setAssessments] = useState<Map<string, ComplianceAssessment>>(new Map());
   const [summary, setSummary] = useState<Record<ComplianceVerdict, number> | null>(null);
+  const [assessmentList, setAssessmentList] = useState<ComplianceAssessment[]>([]);
+  const [qualification, setQualification] = useState<QualificationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [search, setSearch] = useState('');
@@ -42,18 +44,21 @@ export function ComplianceMatrix({ tenderId }: Props) {
     let active = true;
     setIsLoading(true);
     setError(null);
-    void Promise.allSettled([getTenderRequirements(tenderId), getComplianceReport(tenderId)])
-      .then(([requirementResult, complianceResult]) => {
+    void Promise.allSettled([getTenderRequirements(tenderId), getComplianceReport(tenderId), getQualification(tenderId)])
+      .then(([requirementResult, complianceResult, qualificationResult]) => {
         if (!active) return;
         if (requirementResult.status === 'fulfilled') setRequirements(requirementResult.value);
         else setError(requirementResult.reason instanceof Error ? requirementResult.reason.message : 'Could not load the compliance matrix.');
         if (complianceResult.status === 'fulfilled' && complianceResult.value) {
           setAssessments(new Map(complianceResult.value.assessments.map((item) => [item.requirementId, item])));
+          setAssessmentList(complianceResult.value.assessments);
           setSummary(complianceResult.value.summary);
         } else {
           setAssessments(new Map());
+          setAssessmentList([]);
           setSummary(null);
         }
+        setQualification(qualificationResult.status === 'fulfilled' ? qualificationResult.value : null);
       })
       .finally(() => { if (active) setIsLoading(false); });
     return () => { active = false; };
@@ -89,18 +94,14 @@ export function ComplianceMatrix({ tenderId }: Props) {
 
     {error && <div className="alert error" role="alert"><strong>Matrix unavailable</strong><span>{error}</span></div>}
 
-    {summary && <div className="verdict-summary">
-      {verdictOrder.map((verdict) => <button
-        type="button"
-        className={`verdict-stat ${verdict}${verdictFilter === verdict ? ' is-active' : ''}`}
-        key={verdict}
-        aria-pressed={verdictFilter === verdict}
-        onClick={() => setVerdictFilter(verdictFilter === verdict ? null : verdict)}
-      >
-        <div className="verdict-stat-value">{summary[verdict]}</div>
-        <div className="verdict-stat-label">{verdictLabels[verdict]}</div>
-      </button>)}
-    </div>}
+    {summary && <TenderRadar
+      tenderId={tenderId}
+      assessments={assessmentList}
+      summary={summary}
+      qualification={qualification}
+      activeVerdict={verdictFilter}
+      onSelectVerdict={setVerdictFilter}
+    />}
 
     {requirements.length > 0 && <div className="matrix-toolbar">
       <input
