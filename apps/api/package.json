@@ -1,6 +1,27 @@
 {
-  "name": "@tenderpilot/api", "version": "0.1.0", "private": true, "type": "module",
-  "scripts": { "dev": "tsx watch src/server.ts", "build": "tsc -b", "typecheck": "tsc -b --pretty false", "test": "node --test" },
-  "dependencies": { "@fastify/cors": "^10.0.2", "@tenderpilot/shared": "0.1.0", "dotenv": "^16.4.7", "fastify": "^5.2.1" },
-  "devDependencies": { "tsx": "^4.19.3" }
+  "name": "@tenderpilot/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -b",
+    "typecheck": "tsc -b --pretty false",
+    "db:migrate": "tsx src/db/migrate.ts",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@fastify/cors": "^10.0.2",
+    "@fastify/multipart": "^10.1.1",
+    "@tenderpilot/shared": "0.1.0",
+    "dotenv": "^16.4.7",
+    "fastify": "^5.2.1",
+    "ioredis": "^6.0.0",
+    "pdf-parse": "^2.4.5",
+    "pg": "^8.23.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.23.1",
+    "tsx": "^4.19.3"
+  }
 }
