@@ -31,3 +31,20 @@ export interface ProposalSection { id: string; tenderId: string; title: string; 
 export interface HumanReview { id: string; targetId: string; status: 'pending' | 'approved' | 'changes_requested'; reviewer?: string; }
 export interface ProposalSourceReference { kind: 'requirement' | 'company_profile' | 'reference' | 'team' | 'attestation' | 'previous_proposal'; id: string; label: string; }
 export interface ProposalSectionDetail extends ProposalSection { content: string; correctedContent?: string; reviewStatus: 'pending' | 'approved' | 'changes_requested'; sourceReferences: ProposalSourceReference[]; }
+export type ComplianceVerdict = 'compliant' | 'non_compliant' | 'missing_evidence' | 'needs_review';
+export interface ComplianceEvidence { kind: 'certification' | 'attestation' | 'reference' | 'team' | 'sector' | 'capacity'; id: string; label: string; }
+export interface ComplianceAssessment {
+	requirementId: string;
+	requirementTitle: string;
+	type: RequirementType;
+	verdict: ComplianceVerdict;
+	notes: string;
+	evidence: ComplianceEvidence[];
+	sourcePage: number;
+	sourceExcerpt: string;
+}
+export interface ComplianceReport {
+	tenderId: string;
+	assessments: ComplianceAssessment[];
+	summary: Record<ComplianceVerdict, number>;
+}

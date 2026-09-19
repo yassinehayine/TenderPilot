@@ -3,15 +3,13 @@ import { createReadStream } from 'node:fs';
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
-import { extractRequirements } from '../agents/extractor/extractor-agent.js';
-import { qualifyTender } from '../agents/qualifier/qualifier-agent.js';
-import { writeProposal } from '../agents/writer/writer-agent.js';
+import { runExtractionStage, runQualificationAndCompliance, runWritingStage } from '../agents/orchestrator/index.js';
 import { config } from '../config.js';
 import { loadCompanyProfile } from '../services/company-profile.js';
-import { createTender, getQualification, getProposalSections, getTender, getTenderDocument, getTenderRequirements, markTenderNeedsReview, replaceProposalSections, replaceTenderRequirements, saveQualification, updateProposalSectionReview, updateTenderStage } from '../db/repository.js';
+import { createTender, getComplianceReport, getQualification, getProposalSections, getTender, getTenderDocument, getTenderRequirements, markTenderNeedsReview, replaceTenderRequirements, updateProposalSectionReview, updateTenderStage } from '../db/repository.js';
 import { extractPdfPages } from '../services/pdf-extractor.js';
 import { proposalToDocx } from '../services/proposal-export.js';
-import { unreadablePageStatus, withTransientRetries } from '../workflow/policy.js';
+import { unreadablePageStatus } from '../workflow/policy.js';
 
 export async function tenderRoutes(app: FastifyInstance) {
   async function processTender(filename: string, buffer: Buffer) {
@@ -36,11 +34,7 @@ export async function tenderRoutes(app: FastifyInstance) {
       const readablePages = extraction.pages.filter((page) => !extraction.unreadablePages.includes(page.page));
       const processingStatus = unreadablePageStatus(extraction.unreadablePages);
       await updateTenderStage(tenderId, 'extracting_requirements', 1).catch(() => undefined);
-      const requirements = readablePages.length > 0 ? await withTransientRetries(
-        () => extractRequirements(readablePages),
-        3,
-        (attempt) => updateTenderStage(tenderId, 'extracting_requirements', attempt)
-      ) : [];
+      const requirements = readablePages.length > 0 ? await runExtractionStage(tenderId, readablePages) : [];
       await replaceTenderRequirements(tenderId, requirements, processingStatus);
       if (processingStatus === 'needs_review') await updateTenderStage(tenderId, 'human_review', 1).catch(() => undefined);
       const currentTender = await getTender(tenderId);
@@ -104,21 +98,12 @@ export async function tenderRoutes(app: FastifyInstance) {
     const requirements = await getTenderRequirements(request.params.id);
     if (requirements.length === 0) return reply.code(422).send({ error: 'No extracted requirements are available for qualification.' });
     try {
-      await updateTenderStage(request.params.id, 'qualify', 1);
-      const companyProfile = await loadCompanyProfile();
-      const qualification = await withTransientRetries(
-        () => qualifyTender(request.params.id, requirements, companyProfile),
-        3,
-        (attempt) => updateTenderStage(request.params.id, 'qualify', attempt)
-      );
-      await updateTenderStage(request.params.id, 'compliance', 1);
-      const saved = await saveQualification(qualification);
-      await updateTenderStage(request.params.id, 'human_review', 1);
-      return saved;
+      const { qualification } = await runQualificationAndCompliance(request.params.id, requirements);
+      return qualification;
     } catch (error) {
       request.log.error(error, 'Tender qualification failed');
       await markTenderNeedsReview(request.params.id, 'human_review', error instanceof Error ? error.message : 'Qualification failed.').catch(() => undefined);
-      return reply.code(422).send({ error: 'Qualification failed. No go/no-go result was persisted.' });
+      return reply.code(422).send({ error: 'Qualification or compliance failed. The tender is flagged for human review.' });
     }
   });
 
@@ -128,21 +113,19 @@ export async function tenderRoutes(app: FastifyInstance) {
     return qualification;
   });
 
+  app.get<{ Params: { id: string } }>('/api/tenders/:id/compliance', async (request, reply) => {
+    const report = await getComplianceReport(request.params.id);
+    if (!report) return reply.code(404).send({ error: 'No compliance result found. Run qualification first.' });
+    return report;
+  });
+
   app.post<{ Params: { id: string } }>('/api/tenders/:id/proposal', async (request, reply) => {
     const tender = await getTender(request.params.id);
     const requirements = await getTenderRequirements(request.params.id);
     if (!tender || requirements.length === 0) return reply.code(422).send({ error: 'A processed tender with requirements is required.' });
     try {
-      await updateTenderStage(request.params.id, 'write', 1);
       const companyProfile = await loadCompanyProfile();
-      const sections = await withTransientRetries(
-        () => writeProposal(tender, requirements, companyProfile),
-        3,
-        (attempt) => updateTenderStage(request.params.id, 'write', attempt)
-      );
-      if (sections.length === 0) return reply.code(422).send({ error: 'Writer returned no traceable proposal sections.' });
-      await replaceProposalSections(request.params.id, sections);
-      await updateTenderStage(request.params.id, 'human_review', 1);
+      await runWritingStage(request.params.id, tender, requirements, companyProfile);
       return await getProposalSections(request.params.id);
     } catch (error) {
       request.log.error(error, 'Proposal generation failed');

@@ -1,4 +1,5 @@
-import type { ProposalSectionDetail, QualificationResult, Tender, TenderRequirement } from '@tenderpilot/shared';
+import type { ComplianceAssessment, ComplianceReport, ComplianceVerdict, ProposalSectionDetail, QualificationResult, Tender, TenderRequirement } from '@tenderpilot/shared';
+import { verdictToRequirementStatus } from '../agents/compliance/index.js';
 import { pool } from './client.js';
 
 export type ProcessingStatus = 'uploaded' | 'processing' | 'ready' | 'needs_review' | 'failed';
@@ -199,6 +200,55 @@ export async function updateProposalSectionReview(input: { id: string; status: '
     [input.id, input.status, input.correctedContent ?? null]
   );
   return (result.rows[0] as ProposalSectionDetail | undefined) ?? null;
+}
+
+/**
+ * Persists the compliance agent verdicts and mirrors them onto
+ * tender_requirements.compliance_status, which the compliance matrix already reads.
+ */
+export async function replaceComplianceResults(tenderId: string, assessments: ComplianceAssessment[]) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(
+      'DELETE FROM compliance_results WHERE requirement_id IN (SELECT id FROM tender_requirements WHERE tender_id = $1)',
+      [tenderId]
+    );
+    for (const assessment of assessments) {
+      await client.query(
+        `INSERT INTO compliance_results (id, requirement_id, status, notes, evidence)
+         VALUES (gen_random_uuid(), $1, $2, $3, $4)`,
+        [assessment.requirementId, assessment.verdict, assessment.notes, JSON.stringify(assessment.evidence)]
+      );
+      await client.query(
+        'UPDATE tender_requirements SET compliance_status = $2 WHERE id = $1 AND tender_id = $3',
+        [assessment.requirementId, verdictToRequirementStatus(assessment.verdict), tenderId]
+      );
+    }
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function getComplianceReport(tenderId: string): Promise<ComplianceReport | null> {
+  const result = await pool.query<ComplianceAssessment>(
+    `SELECT c.requirement_id AS "requirementId", r.title AS "requirementTitle",
+            r.requirement_type AS type, c.status AS verdict, c.notes,
+            c.evidence, r.source_page AS "sourcePage", r.source_excerpt AS "sourceExcerpt"
+     FROM compliance_results c
+     JOIN tender_requirements r ON r.id = c.requirement_id
+     WHERE r.tender_id = $1
+     ORDER BY r.source_page, r.id`,
+    [tenderId]
+  );
+  if (result.rows.length === 0) return null;
+  const summary: Record<ComplianceVerdict, number> = { compliant: 0, non_compliant: 0, missing_evidence: 0, needs_review: 0 };
+  for (const assessment of result.rows) summary[assessment.verdict] += 1;
+  return { tenderId, assessments: result.rows, summary };
 }
 
 export async function updateTenderStage(tenderId: string, stage: string, attempt: number) {

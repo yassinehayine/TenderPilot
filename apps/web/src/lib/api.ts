@@ -137,3 +137,27 @@ export async function reviewProposalSection(sectionId: string, status: 'approved
   if (!response.ok) throw new Error(payload.error ?? 'Could not save review.');
   return payload;
 }
+export type ComplianceVerdict = 'compliant' | 'non_compliant' | 'missing_evidence' | 'needs_review';
+export interface ComplianceEvidence { kind: string; id: string; label: string; }
+export interface ComplianceAssessment {
+  requirementId: string;
+  requirementTitle: string;
+  type: 'obligatoire' | 'optionnelle' | 'éliminatoire';
+  verdict: ComplianceVerdict;
+  notes: string;
+  evidence: ComplianceEvidence[];
+  sourcePage: number;
+  sourceExcerpt: string;
+}
+export interface ComplianceReport {
+  tenderId: string;
+  assessments: ComplianceAssessment[];
+  summary: Record<ComplianceVerdict, number>;
+}
+
+export async function getComplianceReport(tenderId: string): Promise<ComplianceReport | null> {
+  const response = await fetch(`/api/tenders/${tenderId}/compliance`);
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error('Could not load the compliance report.');
+  return response.json() as Promise<ComplianceReport>;
+}
