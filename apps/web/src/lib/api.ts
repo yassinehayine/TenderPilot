@@ -90,7 +90,7 @@ export async function getTenderFixtures(): Promise<TenderFixture[]> {
 }
 
 export async function uploadTenderFixture(filename: string): Promise<TenderUploadResult> {
-  const response = await fetch(`/api/tenders/fixtures/${encodeURIComponent(filename)}`, { method: 'POST' });
+  const response = await fetch(`/api/tenders/fixtures/${encodeURIComponent(filename)}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
   const payload = await response.json() as TenderUploadResult & { error?: string };
   if (!response.ok) throw new Error(payload.error ?? 'Tender fixture processing failed.');
   return payload;

@@ -1,8 +1,9 @@
-import 'dotenv/config';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
+import { config as loadEnv } from 'dotenv';
 
 const repositoryRoot = resolve(fileURLToPath(new URL('../../../', import.meta.url)));
+loadEnv({ path: resolve(repositoryRoot, '.env') });
 
 export const config = {
   port: Number(process.env.PORT ?? 3001),
