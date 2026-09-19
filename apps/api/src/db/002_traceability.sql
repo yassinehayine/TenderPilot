@@ -1,5 +1,7 @@
 ALTER TABLE tenders ADD COLUMN IF NOT EXISTS processing_status TEXT NOT NULL DEFAULT 'uploaded';
 ALTER TABLE tenders ADD COLUMN IF NOT EXISTS processing_error TEXT;
+ALTER TABLE tenders ADD COLUMN IF NOT EXISTS processing_stage TEXT NOT NULL DEFAULT 'intake';
+ALTER TABLE tenders ADD COLUMN IF NOT EXISTS processing_attempt INTEGER NOT NULL DEFAULT 0;
 
 ALTER TABLE tender_requirements ADD COLUMN IF NOT EXISTS source_page INTEGER;
 ALTER TABLE tender_requirements ADD COLUMN IF NOT EXISTS source_excerpt TEXT;
@@ -8,6 +10,12 @@ ALTER TABLE tender_requirements ADD COLUMN IF NOT EXISTS confidence NUMERIC(5, 4
 ALTER TABLE internal_documents ADD COLUMN IF NOT EXISTS embedding JSONB;
 ALTER TABLE human_reviews ADD COLUMN IF NOT EXISTS corrected_content TEXT;
 ALTER TABLE human_reviews ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMPTZ;
+
+ALTER TABLE proposal_sections ADD COLUMN IF NOT EXISTS content TEXT;
+ALTER TABLE proposal_sections ADD COLUMN IF NOT EXISTS source_references JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE proposal_sections ADD COLUMN IF NOT EXISTS review_status TEXT NOT NULL DEFAULT 'pending';
+ALTER TABLE proposal_sections ADD COLUMN IF NOT EXISTS corrected_content TEXT;
+ALTER TABLE proposal_sections ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
 CREATE TABLE IF NOT EXISTS tender_documents (
   id UUID PRIMARY KEY,

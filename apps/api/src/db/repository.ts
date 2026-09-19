@@ -1,4 +1,4 @@
-import type { QualificationResult, Tender, TenderRequirement } from '@tenderpilot/shared';
+import type { ProposalSectionDetail, QualificationResult, Tender, TenderRequirement } from '@tenderpilot/shared';
 import { pool } from './client.js';
 
 export type ProcessingStatus = 'uploaded' | 'processing' | 'ready' | 'needs_review' | 'failed';
@@ -43,6 +43,7 @@ export async function getTender(id: string) {
   const result = await pool.query(
     `SELECT t.id, t.title, t.reference, t.status, t.created_at AS "createdAt",
             t.processing_status AS "processingStatus", t.processing_error AS "processingError",
+            t.processing_stage AS "processingStage", t.processing_attempt AS "processingAttempt",
             d.original_filename AS "originalFilename", d.page_count AS "pageCount",
             d.unreadable_pages AS "unreadablePages", d.storage_key AS "storageKey"
      FROM tenders t LEFT JOIN tender_documents d ON d.tender_id = t.id
@@ -54,7 +55,8 @@ export async function getTender(id: string) {
 
 export async function replaceTenderRequirements(
   tenderId: string,
-  requirements: Array<Omit<TenderRequirement, 'id' | 'tenderId'>>
+  requirements: Array<Omit<TenderRequirement, 'id' | 'tenderId'>>,
+  processingStatus: ProcessingStatus = 'ready'
 ) {
   const client = await pool.connect();
   try {
@@ -68,7 +70,7 @@ export async function replaceTenderRequirements(
         [tenderId, requirement.title, requirement.type, requirement.status, requirement.sourcePage, requirement.sourceExcerpt, requirement.confidence]
       );
     }
-    await client.query('UPDATE tenders SET processing_status = $2 WHERE id = $1', [tenderId, 'ready']);
+    await client.query('UPDATE tenders SET processing_status = $2 WHERE id = $1', [tenderId, processingStatus]);
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');
@@ -150,4 +152,55 @@ export async function getQualification(tenderId: string): Promise<QualificationR
     [row.id]
   );
   return { ...row, blockers: blockers.rows } as QualificationResult;
+}
+
+export async function replaceProposalSections(tenderId: string, sections: Array<Omit<ProposalSectionDetail, 'id' | 'tenderId'>>) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM proposal_sections WHERE tender_id = $1', [tenderId]);
+    for (const section of sections) {
+      await client.query(
+        `INSERT INTO proposal_sections
+         (id, tender_id, title, status, content, source_references, review_status)
+         VALUES (gen_random_uuid(), $1, $2, 'in_review', $3, $4, $5)`,
+        [tenderId, section.title, section.content, JSON.stringify(section.sourceReferences), section.reviewStatus]
+      );
+    }
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function getProposalSections(tenderId: string): Promise<ProposalSectionDetail[]> {
+  const result = await pool.query(
+    `SELECT id, tender_id AS "tenderId", title, status, content,
+            corrected_content AS "correctedContent", review_status AS "reviewStatus",
+            source_references AS "sourceReferences"
+     FROM proposal_sections WHERE tender_id = $1 ORDER BY id`,
+    [tenderId]
+  );
+  return result.rows as ProposalSectionDetail[];
+}
+
+export async function updateProposalSectionReview(input: { id: string; status: 'approved' | 'changes_requested'; correctedContent?: string }) {
+  const result = await pool.query(
+    `UPDATE proposal_sections
+     SET review_status = $2, status = CASE WHEN $2 = 'approved' THEN 'approved' ELSE 'in_review' END,
+         corrected_content = $3, updated_at = NOW()
+     WHERE id = $1
+     RETURNING id, tender_id AS "tenderId", title, status, content,
+       corrected_content AS "correctedContent", review_status AS "reviewStatus",
+       source_references AS "sourceReferences"`,
+    [input.id, input.status, input.correctedContent ?? null]
+  );
+  return (result.rows[0] as ProposalSectionDetail | undefined) ?? null;
+}
+
+export async function updateTenderStage(tenderId: string, stage: string, attempt: number) {
+  await pool.query('UPDATE tenders SET processing_stage = $2, processing_attempt = $3 WHERE id = $1', [tenderId, stage, attempt]);
 }

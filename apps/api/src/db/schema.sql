@@ -7,7 +7,9 @@ CREATE TABLE IF NOT EXISTS tenders (
   status TEXT NOT NULL DEFAULT 'draft',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   processing_status TEXT NOT NULL DEFAULT 'uploaded',
-  processing_error TEXT
+  processing_error TEXT,
+  processing_stage TEXT NOT NULL DEFAULT 'intake',
+  processing_attempt INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS tender_requirements (

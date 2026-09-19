@@ -29,3 +29,5 @@ export interface QualificationResult extends GoNoGoResult {
 }
 export interface ProposalSection { id: string; tenderId: string; title: string; status: 'draft' | 'in_review' | 'approved'; }
 export interface HumanReview { id: string; targetId: string; status: 'pending' | 'approved' | 'changes_requested'; reviewer?: string; }
+export interface ProposalSourceReference { kind: 'requirement' | 'company_profile' | 'reference' | 'team' | 'attestation' | 'previous_proposal'; id: string; label: string; }
+export interface ProposalSectionDetail extends ProposalSection { content: string; correctedContent?: string; reviewStatus: 'pending' | 'approved' | 'changes_requested'; sourceReferences: ProposalSourceReference[]; }

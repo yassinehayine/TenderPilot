@@ -5,10 +5,12 @@ import { basename, join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { extractRequirements } from '../agents/extractor/extractor-agent.js';
 import { qualifyTender } from '../agents/qualifier/qualifier-agent.js';
+import { writeProposal } from '../agents/writer/writer-agent.js';
 import { config } from '../config.js';
 import { loadCompanyProfile } from '../services/company-profile.js';
-import { createTender, getQualification, getTender, getTenderDocument, getTenderRequirements, markTenderFailed, replaceTenderRequirements, saveQualification } from '../db/repository.js';
+import { createTender, getQualification, getProposalSections, getTender, getTenderDocument, getTenderRequirements, markTenderFailed, replaceProposalSections, replaceTenderRequirements, saveQualification, updateProposalSectionReview, updateTenderStage } from '../db/repository.js';
 import { extractPdfPages } from '../services/pdf-extractor.js';
+import { proposalToDocx } from '../services/proposal-export.js';
 
 export async function tenderRoutes(app: FastifyInstance) {
   async function processTender(filename: string, buffer: Buffer) {
@@ -30,9 +32,12 @@ export async function tenderRoutes(app: FastifyInstance) {
         unreadablePages: extraction.unreadablePages,
         processingStatus: 'processing'
       });
-      const requirements = await extractRequirements(extraction.pages);
-      await replaceTenderRequirements(tenderId, requirements);
-      return { ...tender, processingStatus: extraction.unreadablePages.length > 0 ? 'needs_review' : 'ready', unreadablePages: extraction.unreadablePages, requirementCount: requirements.length };
+      const readablePages = extraction.pages.filter((page) => !extraction.unreadablePages.includes(page.page));
+      const processingStatus = extraction.unreadablePages.length > 0 ? 'needs_review' : 'ready';
+      await updateTenderStage(tenderId, 'extracting_requirements', 1).catch(() => undefined);
+      const requirements = readablePages.length > 0 ? await extractRequirements(readablePages) : [];
+      await replaceTenderRequirements(tenderId, requirements, processingStatus);
+      return { ...tender, processingStatus, unreadablePages: extraction.unreadablePages, requirementCount: requirements.length };
     } catch (error) {
       await markTenderFailed(tenderId, error instanceof Error ? error.message : 'Unknown processing failure.').catch(() => undefined);
       throw error;
@@ -102,6 +107,40 @@ export async function tenderRoutes(app: FastifyInstance) {
     const qualification = await getQualification(request.params.id);
     if (!qualification) return reply.code(404).send({ error: 'No qualification result found.' });
     return qualification;
+  });
+
+  app.post<{ Params: { id: string } }>('/api/tenders/:id/proposal', async (request, reply) => {
+    const tender = await getTender(request.params.id);
+    const requirements = await getTenderRequirements(request.params.id);
+    if (!tender || requirements.length === 0) return reply.code(422).send({ error: 'A processed tender with requirements is required.' });
+    try {
+      const companyProfile = await loadCompanyProfile();
+      const sections = await writeProposal(tender, requirements, companyProfile);
+      if (sections.length === 0) return reply.code(422).send({ error: 'Writer returned no traceable proposal sections.' });
+      await replaceProposalSections(request.params.id, sections);
+      return await getProposalSections(request.params.id);
+    } catch (error) {
+      request.log.error(error, 'Proposal generation failed');
+      return reply.code(422).send({ error: 'Proposal generation failed. No proposal was persisted.' });
+    }
+  });
+
+  app.get<{ Params: { id: string } }>('/api/tenders/:id/proposal', async (request) => getProposalSections(request.params.id));
+
+  app.get<{ Params: { id: string } }>('/api/tenders/:id/proposal.docx', async (request, reply) => {
+    const tender = await getTender(request.params.id);
+    const sections = await getProposalSections(request.params.id);
+    if (!tender || sections.length === 0) return reply.code(404).send({ error: 'No proposal found.' });
+    const document = await proposalToDocx(`${tender.title} - Mémoire technique`, sections);
+    return reply.type('application/vnd.openxmlformats-officedocument.wordprocessingml.document').header('content-disposition', `attachment; filename="${tender.title}-memoire-technique.docx"`).send(document);
+  });
+
+  app.patch<{ Params: { sectionId: string }; Body: { status?: 'approved' | 'changes_requested'; correctedContent?: string } }>('/api/proposal-sections/:sectionId/review', async (request, reply) => {
+    const status = request.body?.status;
+    if (status !== 'approved' && status !== 'changes_requested') return reply.code(400).send({ error: 'Review status must be approved or changes_requested.' });
+    const section = await updateProposalSectionReview({ id: request.params.sectionId, status, correctedContent: request.body.correctedContent });
+    if (!section) return reply.code(404).send({ error: 'Proposal section not found.' });
+    return section;
   });
 
   app.get<{ Params: { id: string } }>('/api/tenders/:id/document', async (request, reply) => {

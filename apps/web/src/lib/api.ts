@@ -95,3 +95,26 @@ export async function uploadTenderFixture(filename: string): Promise<TenderUploa
   if (!response.ok) throw new Error(payload.error ?? 'Tender fixture processing failed.');
   return payload;
 }
+
+export interface ProposalSourceReference { kind: string; id: string; label: string; }
+export interface ProposalSection { id: string; tenderId: string; title: string; content: string; correctedContent?: string; reviewStatus: 'pending' | 'approved' | 'changes_requested'; sourceReferences: ProposalSourceReference[]; }
+
+export async function getProposal(tenderId: string): Promise<ProposalSection[]> {
+  const response = await fetch(`/api/tenders/${tenderId}/proposal`);
+  if (!response.ok) throw new Error('Could not load the technical proposal.');
+  return response.json() as Promise<ProposalSection[]>;
+}
+
+export async function generateProposal(tenderId: string): Promise<ProposalSection[]> {
+  const response = await fetch(`/api/tenders/${tenderId}/proposal`, { method: 'POST' });
+  const payload = await response.json() as ProposalSection[] & { error?: string };
+  if (!response.ok) throw new Error(payload.error ?? 'Proposal generation failed.');
+  return payload;
+}
+
+export async function reviewProposalSection(sectionId: string, status: 'approved' | 'changes_requested', correctedContent?: string): Promise<ProposalSection> {
+  const response = await fetch(`/api/proposal-sections/${sectionId}/review`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ status, correctedContent }) });
+  const payload = await response.json() as ProposalSection & { error?: string };
+  if (!response.ok) throw new Error(payload.error ?? 'Could not save review.');
+  return payload;
+}

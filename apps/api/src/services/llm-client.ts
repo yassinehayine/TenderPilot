@@ -4,7 +4,7 @@ interface ChatResponse {
   choices?: Array<{ message?: { content?: string } }>;
 }
 
-export async function completeJson(prompt: string): Promise<unknown> {
+export async function completeJson(prompt: string, model = config.llmModel): Promise<unknown> {
   if (!config.llmUrl || !config.llmApiKey) {
     throw new Error('LLM_URL and LLM_API_KEY must be configured for extraction.');
   }
@@ -19,7 +19,7 @@ export async function completeJson(prompt: string): Promise<unknown> {
       'api-key': config.llmApiKey
     },
     body: JSON.stringify({
-      model: config.llmModel,
+      model,
       temperature: 0,
       response_format: { type: 'json_object' },
       messages: [

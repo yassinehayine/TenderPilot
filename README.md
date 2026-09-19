@@ -1,12 +1,13 @@
 # TenderPilot
 
-TenderPilot is a hackathon project foundation for an intelligent tender response workspace. This repository currently contains the product shell and infrastructure scaffolding; the Agentic AI implementation is planned for the next development phase.
+TenderPilot is a hackathon MVP for an intelligent tender response workspace. It supports traceable tender extraction, qualification, technical proposal drafting, DOCX export, and human section review. OCR and full orchestration remain explicit follow-up work.
 
 ## Architecture
 
 - `apps/web`: React, TypeScript, and Vite frontend shell.
 - `apps/api`: Fastify and TypeScript backend with a readiness route.
 - `packages/shared`: shared domain contracts used by both applications.
+- `data/tenderpilot`: official Sujet 01 demo and test corpus.
 - PostgreSQL: planned system of record for tender and review data.
 - Redis: planned cache and job-state store.
 
@@ -54,6 +55,8 @@ npm test
 
 The API readiness endpoint is available at `http://localhost:3001/health`.
 
+The Technical Proposal page generates grounded sections through the writer agent and exposes a DOCX download. Human Review saves section corrections and approval status in PostgreSQL.
+
 ## Current status
 
-The repository is ready for feature development. It does not yet implement document extraction, OCR, LLM calls, LangGraph workflows, RAG, qualification reasoning, proposal generation, compliance reasoning, or autonomous agent loops. Those capabilities belong to the next phase and will be added behind the current application boundaries.
+The repository currently implements EX-01 through EX-06 structurally, including explicit unreadable-page handling for EX-07. OCR for the two scanned official AOs, embeddings/RAG, and a durable multi-stage orchestrator with retries/checkpoints are not implemented yet. No credentials are stored in the repository.
