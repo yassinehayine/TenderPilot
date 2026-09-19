@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { getTenderFixtures, uploadTender, uploadTenderFixture, type TenderFixture, type TenderUploadResult } from '../../lib/api';
 
-interface Props { onUploaded: (tenderId: string) => void; }
+interface Props { onUploaded: (tenderId: string) => void; onProcessingFailure: (tenderId: string) => void; }
 
-export function UploadTender({ onUploaded }: Props) {
+export function UploadTender({ onUploaded, onProcessingFailure }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [result, setResult] = useState<TenderUploadResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -26,6 +26,7 @@ export function UploadTender({ onUploaded }: Props) {
       setResult(uploaded);
       onUploaded(uploaded.id);
     } catch (uploadError) {
+      if (uploadError instanceof Error && 'tenderId' in uploadError && typeof uploadError.tenderId === 'string') onProcessingFailure(uploadError.tenderId);
       setError(uploadError instanceof Error ? uploadError.message : 'Tender upload failed.');
     } finally {
       setIsUploading(false);
@@ -41,6 +42,7 @@ export function UploadTender({ onUploaded }: Props) {
       setResult(uploaded);
       onUploaded(uploaded.id);
     } catch (uploadError) {
+      if (uploadError instanceof Error && 'tenderId' in uploadError && typeof uploadError.tenderId === 'string') onProcessingFailure(uploadError.tenderId);
       setError(uploadError instanceof Error ? uploadError.message : 'Tender fixture processing failed.');
     } finally {
       setIsUploading(false);

@@ -9,6 +9,23 @@ export interface TenderUploadResult {
   processingError?: string | null;
 }
 
+export interface TenderStatus {
+  id: string;
+  title: string;
+  processingStatus: 'uploaded' | 'processing' | 'ready' | 'needs_review' | 'failed';
+  processingStage: string;
+  processingAttempt: number;
+  processingError?: string | null;
+  pageCount: number;
+  unreadablePages: number[];
+}
+
+export async function getTenderStatus(tenderId: string): Promise<TenderStatus> {
+  const response = await fetch(`/api/tenders/${tenderId}`);
+  if (!response.ok) throw new Error('Could not load tender processing status.');
+  return response.json() as Promise<TenderStatus>;
+}
+
 export interface TenderRequirement {
   id: string;
   tenderId: string;
@@ -24,8 +41,8 @@ export async function uploadTender(file: File): Promise<TenderUploadResult> {
   const formData = new FormData();
   formData.append('file', file);
   const response = await fetch('/api/tenders', { method: 'POST', body: formData });
-  const payload = await response.json() as TenderUploadResult & { error?: string; processingError?: string };
-  if (!response.ok) throw new Error(payload.processingError ?? payload.error ?? 'Tender upload failed.');
+  const payload = await response.json() as TenderUploadResult & { error?: string; processingError?: string; tenderId?: string };
+  if (!response.ok) throw Object.assign(new Error(payload.processingError ?? payload.error ?? 'Tender upload failed.'), { tenderId: payload.tenderId });
   return payload;
 }
 
@@ -93,8 +110,8 @@ export async function getTenderFixtures(): Promise<TenderFixture[]> {
 
 export async function uploadTenderFixture(filename: string): Promise<TenderUploadResult> {
   const response = await fetch(`/api/tenders/fixtures/${encodeURIComponent(filename)}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
-  const payload = await response.json() as TenderUploadResult & { error?: string; processingError?: string };
-  if (!response.ok) throw new Error(payload.processingError ?? payload.error ?? 'Tender fixture processing failed.');
+  const payload = await response.json() as TenderUploadResult & { error?: string; processingError?: string; tenderId?: string };
+  if (!response.ok) throw Object.assign(new Error(payload.processingError ?? payload.error ?? 'Tender fixture processing failed.'), { tenderId: payload.tenderId });
   return payload;
 }
 
