@@ -1,5 +1,6 @@
 import type { RequirementType, TenderRequirement } from '@tenderpilot/shared';
 import { completeJson } from '../../services/llm-client.js';
+import { hasTraceableExcerpt } from '../../workflow/policy.js';
 
 const requirementTypes = new Set<RequirementType>(['obligatoire', 'optionnelle', 'éliminatoire']);
 
@@ -18,7 +19,7 @@ export async function extractRequirements(pages: Array<{ page: number; text: str
     const excerpt = item.sourceExcerpt.trim();
     const sourcePageText = pageText.get(item.sourcePage);
     const confidence = typeof item.confidence === 'number' ? Math.max(0, Math.min(1, item.confidence)) : 0;
-    if (!requirementTypes.has(type as RequirementType) || !sourcePageText || excerpt.length < 10 || !sourcePageText.includes(excerpt)) return [];
+    if (!requirementTypes.has(type as RequirementType) || !sourcePageText || !hasTraceableExcerpt(sourcePageText, excerpt)) return [];
     return [{ title: item.title.trim(), type: type as RequirementType, status: 'unknown' as const, sourcePage: item.sourcePage, sourceExcerpt: excerpt, confidence }];
   });
 }

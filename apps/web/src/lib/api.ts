@@ -5,6 +5,8 @@ export interface TenderUploadResult {
   pageCount: number;
   unreadablePages: number[];
   requirementCount: number;
+  processingStage?: string;
+  processingError?: string | null;
 }
 
 export interface TenderRequirement {
@@ -22,8 +24,8 @@ export async function uploadTender(file: File): Promise<TenderUploadResult> {
   const formData = new FormData();
   formData.append('file', file);
   const response = await fetch('/api/tenders', { method: 'POST', body: formData });
-  const payload = await response.json() as TenderUploadResult & { error?: string };
-  if (!response.ok) throw new Error(payload.error ?? 'Tender upload failed.');
+  const payload = await response.json() as TenderUploadResult & { error?: string; processingError?: string };
+  if (!response.ok) throw new Error(payload.processingError ?? payload.error ?? 'Tender upload failed.');
   return payload;
 }
 
@@ -91,8 +93,8 @@ export async function getTenderFixtures(): Promise<TenderFixture[]> {
 
 export async function uploadTenderFixture(filename: string): Promise<TenderUploadResult> {
   const response = await fetch(`/api/tenders/fixtures/${encodeURIComponent(filename)}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
-  const payload = await response.json() as TenderUploadResult & { error?: string };
-  if (!response.ok) throw new Error(payload.error ?? 'Tender fixture processing failed.');
+  const payload = await response.json() as TenderUploadResult & { error?: string; processingError?: string };
+  if (!response.ok) throw new Error(payload.processingError ?? payload.error ?? 'Tender fixture processing failed.');
   return payload;
 }
 

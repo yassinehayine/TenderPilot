@@ -204,3 +204,12 @@ export async function updateProposalSectionReview(input: { id: string; status: '
 export async function updateTenderStage(tenderId: string, stage: string, attempt: number) {
   await pool.query('UPDATE tenders SET processing_stage = $2, processing_attempt = $3 WHERE id = $1', [tenderId, stage, attempt]);
 }
+
+export async function markTenderNeedsReview(tenderId: string, stage: string, errorMessage: string) {
+  await pool.query(
+    `UPDATE tenders
+     SET processing_status = 'needs_review', processing_stage = $2, processing_error = $3
+     WHERE id = $1`,
+    [tenderId, stage, errorMessage]
+  );
+}
