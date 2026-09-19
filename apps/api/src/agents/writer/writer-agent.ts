@@ -1,5 +1,5 @@
 import type { ProposalSectionDetail, ProposalSourceReference, Tender, TenderRequirement } from '@tenderpilot/shared';
-import { completeJson } from '../../services/llm-client.js';
+import { completeAzureJson as completeJson } from '../../services/llm-client.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null; }
 
