@@ -19,7 +19,6 @@ export async function completeJson(prompt: string, model = config.llmModel): Pro
     },
     body: JSON.stringify({
       model,
-      temperature: 0,
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: 'You return only valid JSON. Never infer facts not present in the supplied document.' },
